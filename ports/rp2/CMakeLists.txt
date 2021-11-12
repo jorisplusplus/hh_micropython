@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.12)
-
+include_directories(SYSTEM /usr/include/newlib/c++/8.3.1/arm-none-eabi/)
+include_directories(SYSTEM /usr/include/newlib/c++/8.3.1/)
 # Set build type to reduce firmware size
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE MinSizeRel)
@@ -102,6 +103,7 @@ set(MICROPY_SOURCE_PORT
     rp2_pio.c
     tusb_port.c
     uart.c
+    modwebusb.c
 )
 
 set(MICROPY_SOURCE_QSTR
@@ -124,6 +126,7 @@ set(MICROPY_SOURCE_QSTR
     ${PROJECT_SOURCE_DIR}/modutime.c
     ${PROJECT_SOURCE_DIR}/rp2_flash.c
     ${PROJECT_SOURCE_DIR}/rp2_pio.c
+    ${PROJECT_SOURCE_DIR}/modwebusb.c
 )
 
 set(PICO_SDK_COMPONENTS

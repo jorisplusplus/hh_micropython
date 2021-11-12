@@ -74,6 +74,11 @@ uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
         ret |= MP_STREAM_POLL_RD;
     }
     #endif
+    #if MICROPY_HW_ENABLE_WEBUSBDEV
+    if (tud_vendor_mounted() && tud_vendor_available()) {
+        ret |= MP_STREAM_POLL_RD;
+    }
+    #endif
     return ret;
 }
 
@@ -90,6 +95,15 @@ int mp_hal_stdin_rx_chr(void) {
         if (tud_cdc_connected() && tud_cdc_available()) {
             uint8_t buf[1];
             uint32_t count = tud_cdc_read(buf, sizeof(buf));
+            if (count) {
+                return buf[0];
+            }
+        }
+        #endif
+        #if MICROPY_HW_ENABLE_WEBUSBDEV
+        if (tud_vendor_mounted() && tud_vendor_available()) {
+            uint8_t buf[1];
+            uint32_t count = tud_vendor_read(buf, sizeof(buf));
             if (count) {
                 return buf[0];
             }
@@ -119,6 +133,21 @@ void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
             uint32_t n2 = tud_cdc_write(str + i, n);
             tud_task();
             tud_cdc_write_flush();
+            i += n2;
+        }
+    }
+    #endif
+
+    #if MICROPY_HW_ENABLE_WEBUSBDEV
+    if (tud_vendor_mounted() && tud_vendor_write_available()) {
+        for (size_t i = 0; i < len;) {
+            uint32_t n = len - i;
+            if (n > CFG_TUD_VENDOR_EP_BUFSIZE) {
+                n = CFG_TUD_VENDOR_EP_BUFSIZE;
+            }
+            uint32_t n2 = tud_vendor_write(str + i, n);
+            if (n2 == 0) return;
+            tud_task();
             i += n2;
         }
     }
