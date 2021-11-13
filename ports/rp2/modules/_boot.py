@@ -13,3 +13,4 @@ except:
 os.mount(vfs, "/")
 
 del os, bdev, vfs
+import webusb_fs

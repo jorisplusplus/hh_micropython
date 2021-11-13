@@ -43,7 +43,6 @@ def sendto(command, id):
     sendpayload(payload)
 
 def sendstr(command, id, data):
-    print(data)
     payload = bytearray(12+len(data))
     createheader(memoryview(payload), command, len(data), id)
     payload[12:] = data.encode()
@@ -72,11 +71,9 @@ def getdir(data, command, id, size, received, length):
     else:
         dir = str(data,'utf-8').replace("\x00", "")
         rootdir = dir
-        print("Listing: "+dir)
         for f in os.listdir(dir):
             if not f:
                 break
-            print(f)
             dir += "\n"
             if os.stat(rootdir+"/"+f)[0] == 16384:
                 dir += "d"
@@ -94,7 +91,6 @@ def readfile(data, command, id, size, received, length):
 
     try:
         filename = str(data, "utf-8").replace("\x00", "")
-        print("Reading: "+filename)
         filesize = os.stat(filename)[6]        
         f = open(str(data, "utf-8"), "rb")
         sendheader(command, id, filesize)
@@ -105,7 +101,6 @@ def readfile(data, command, id, size, received, length):
             sendpayload(data)
         f.close()
     except:
-        print("Problem reading file")
         sendstr(command, id, "Can't open file")
 
 write_obj = None
@@ -128,7 +123,6 @@ def writefile(data, command, id, size, received, length):
                         write_obj.write(data[i+1:received])
                 except:
                     write_failed = 1
-                    print("opening file: "+filename+" failed")
 
                 if received == size:
                     if write_obj:
@@ -202,12 +196,10 @@ def mvfile(data, command, id, size, received, length):
     source = ""
     dest = ""
     for i in range(0, size):
-        print(data[i])
         if data[i] == 0:
             source = str(data[0:i], "utf-8").replace("\x00", "")
             dest = str(data[(i+1):], "utf-8").replace("\x00", "")
             break
-    print("renaming: "+source +" to: "+dest)
     if source == "" or dest == "":
         sender(command, id)
         return 1
@@ -231,46 +223,49 @@ def mkdir(data, command, id, size, received, length):
         sender(command, id)
     return 1
 
-commands = dict()
-commands[1] = heartbeat
-commands[4096] = getdir
-commands[4097] = readfile
-commands[4098] = writefile
-commands[4099] = delfile
-commands[4100] = duplfile
-commands[4101] = mvfile
-commands[4102] = mkdir
+def main_app():
+    commands = dict()
+    commands[1] = heartbeat
+    commands[4096] = getdir
+    commands[4097] = readfile
+    commands[4098] = writefile
+    commands[4099] = delfile
+    commands[4100] = duplfile
+    commands[4101] = mvfile
+    commands[4102] = mkdir
 
-header = bytearray(12)
+    header = bytearray(12)
 
-#Clear webusb buffer
-while webusb.read(memoryview(header)):
-    pass
+    #Clear webusb buffer
+    while webusb.read(memoryview(header)):
+        pass
 
-payload = bytearray(1024)
-payload_mv = memoryview(payload)
-while True:
-    if webusb.available() >= 12:
-        webusb.read(memoryview(header))
-        [command, size, check, id] = struct.unpack("<HIHI", memoryview(header))
-        if check == 0xADDE:
-            pos = 0
-            received = 0
-            if size == 0:
-                if command in commands:
-                    commands[command](payload_mv, command, id, size, 0, 0)
-            else:
-                while received < size:
-                    endbuf = min(1024, size - (received-pos))
-                    delta = webusb.read(payload_mv[pos:endbuf])
-                    received += delta
-                    pos += delta                
+    payload = bytearray(1024)
+    payload_mv = memoryview(payload)
+    while True:
+        if webusb.available() >= 12:
+            webusb.read(memoryview(header))
+            [command, size, check, id] = struct.unpack("<HIHI", memoryview(header))
+            if check == 0xADDE:
+                pos = 0
+                received = 0
+                if size == 0:
                     if command in commands:
-                        if commands[command](payload_mv[:pos], command, id, size, received, pos):
-                            pos = 0
-            
-        else:   #Check failed clearing buffer
-            while webusb.read(memoryview(header)):
-                pass
+                        commands[command](payload_mv, command, id, size, 0, 0)
+                else:
+                    while received < size:
+                        endbuf = min(1024, size - (received-pos))
+                        delta = webusb.read(payload_mv[pos:endbuf])
+                        received += delta
+                        pos += delta                
+                        if command in commands:
+                            if commands[command](payload_mv[:pos], command, id, size, received, pos):
+                                pos = 0
+                
+            else:   #Check failed clearing buffer
+                while webusb.read(memoryview(header)):
+                    pass
 
 
+import _thread
+_thread.start_new_thread(main_app, ())
