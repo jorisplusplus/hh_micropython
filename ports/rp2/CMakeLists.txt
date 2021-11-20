@@ -104,6 +104,7 @@ set(MICROPY_SOURCE_PORT
     tusb_port.c
     uart.c
     modwebusb.c
+    modhid.c
 )
 
 set(MICROPY_SOURCE_QSTR
@@ -127,6 +128,7 @@ set(MICROPY_SOURCE_QSTR
     ${PROJECT_SOURCE_DIR}/rp2_flash.c
     ${PROJECT_SOURCE_DIR}/rp2_pio.c
     ${PROJECT_SOURCE_DIR}/modwebusb.c
+    ${PROJECT_SOURCE_DIR}/modhid.c
 )
 
 set(PICO_SDK_COMPONENTS
