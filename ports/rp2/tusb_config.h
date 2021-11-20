@@ -32,9 +32,24 @@
 #define CFG_TUD_CDC_RX_BUFSIZE  (256)
 #define CFG_TUD_CDC_TX_BUFSIZE  (256)
 
-#define CFG_TUD_VENDOR              (2)
+#define CFG_TUD_VENDOR              (3)
+#define CFG_TUD_VENDOR_EPSIZE       (32)
 #define CFG_TUD_VENDOR_EP_BUFSIZE   (512)
 #define CFG_TUD_VENDOR_RX_BUFSIZE   (512)
 #define CFG_TUD_VENDOR_TX_BUFSIZE   (512)
+
+#define CFG_TUD_HID                 (1)
+
+enum
+{
+  REPORT_ID_KEYBOARD = 1,
+  REPORT_ID_MOUSE
+};
+
+enum
+{
+  VENDOR_REQUEST_WEBUSB = 1,
+  VENDOR_REQUEST_MICROSOFT = 2
+};
 
 #endif // MICROPY_INCLUDED_RP2_TUSB_CONFIG_H

@@ -36,6 +36,7 @@
 #define USBD_STR_SERIAL (0x03)
 #define USBD_STR_CDC (0x04)
 
+
 const tusb_desc_webusb_url_t desc_url =
 {
   .bLength         = 3 + sizeof(URL) - 1,
@@ -93,16 +94,46 @@ const uint8_t *tud_descriptor_device_cb(void)
 
 uint8_t const desc_hid_report[] =
 {
-  TUD_HID_REPORT_DESC_KEYBOARD( HID_REPORT_ID(REPORT_ID_KEYBOARD), ),
-  TUD_HID_REPORT_DESC_MOUSE   ( HID_REPORT_ID(REPORT_ID_MOUSE), )
+  TUD_HID_REPORT_DESC_KEYBOARD( HID_REPORT_ID(REPORT_ID_KEYBOARD)),
+  TUD_HID_REPORT_DESC_MOUSE   ( HID_REPORT_ID(REPORT_ID_MOUSE))
 };
 
 // Invoked when received GET HID REPORT DESCRIPTOR
 // Application return pointer to descriptor
 // Descriptor contents must exist long enough for transfer to complete
-uint8_t const * tud_hid_descriptor_report_cb(void)
+uint8_t const * tud_hid_descriptor_report_cb(uint8_t instance)
 {
   return desc_hid_report;
+}
+
+void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize)
+{
+  // TODO set LED based on CAPLOCK, NUMLOCK etc...
+  (void) report_id;
+  (void) report_type;
+  (void) buffer;
+  (void) bufsize;
+
+  char strbuffer[100];
+  snprintf(strbuffer, 100, "hid: %d %d %d %d\n", instance, report_id, report_type, bufsize);
+
+  tud_cdc_write(strbuffer, strlen(strbuffer));
+}
+
+uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen)
+{
+  // TODO not Implemented
+  (void) report_id;
+  (void) report_type;
+  (void) buffer;
+  (void) reqlen;
+
+  char strbuffer[100];
+  snprintf(strbuffer, 100, "hid: %d %d %d %d\n", instance, report_id, report_type, reqlen);
+
+  tud_cdc_write(strbuffer, strlen(strbuffer));
+
+  return 0;
 }
 
 #endif
@@ -121,6 +152,7 @@ enum
 #if CFG_TUD_VENDOR
   ITF_NUM_VENDOR,
   ITF_NUM_VENDOR2,
+  ITF_NUM_VENDOR3,
 #endif
 
 #if CFG_TUD_HID
@@ -135,20 +167,14 @@ enum
   ITF_NUM_TOTAL
 };
 
-enum
-{
-  VENDOR_REQUEST_WEBUSB = 1,
-  VENDOR_REQUEST_MICROSOFT = 2
-};
-
 #define CONFIG_TOTAL_LEN    (TUD_CONFIG_DESC_LEN + CFG_TUD_CDC*TUD_CDC_DESC_LEN + CFG_TUD_VENDOR*TUD_VENDOR_DESC_LEN + CFG_TUD_HID*TUD_HID_DESC_LEN + CFG_TUD_MIDI*TUD_MIDI_DESC_LEN)
 
 #define EPNUM_CDC_NOTIF     0x01
 #define EPNUM_CDC           0x02
 #define EPNUM_VENDOR        0x03
 #define EPNUM_VENDOR2       0x04
-#define EPNUM_HID           0x05
-#define EPNUM_MIDI          0x06
+#define EPNUM_VENDOR3       0x05
+#define EPNUM_HID           0x06
 
 uint8_t const desc_configuration[] =
 {
@@ -161,13 +187,14 @@ uint8_t const desc_configuration[] =
 #endif
 
 #if CFG_TUD_VENDOR
-  TUD_VENDOR_DESCRIPTOR(ITF_NUM_VENDOR, 3+CFG_TUD_CDC+CFG_TUD_VENDOR, EPNUM_VENDOR, (0x80 | EPNUM_VENDOR), 64),
-  TUD_VENDOR_DESCRIPTOR(ITF_NUM_VENDOR2, 3+CFG_TUD_CDC+CFG_TUD_VENDOR, EPNUM_VENDOR2, (0x80 | EPNUM_VENDOR2), 64),
+  TUD_VENDOR_DESCRIPTOR(ITF_NUM_VENDOR, 3+CFG_TUD_CDC+1, EPNUM_VENDOR, (0x80 | EPNUM_VENDOR), CFG_TUD_VENDOR_EPSIZE),
+  TUD_VENDOR_DESCRIPTOR(ITF_NUM_VENDOR2, 3+CFG_TUD_CDC+2, EPNUM_VENDOR2, (0x80 | EPNUM_VENDOR2), CFG_TUD_VENDOR_EPSIZE),
+  TUD_VENDOR_DESCRIPTOR(ITF_NUM_VENDOR3, 3+CFG_TUD_CDC+3, EPNUM_VENDOR3, (0x80 | EPNUM_VENDOR3), CFG_TUD_VENDOR_EPSIZE),
 #endif
 
 #if CFG_TUD_HID
         // Interface number, string index, protocol, report descriptor len, EP In address, size & polling interval
-  TUD_HID_DESCRIPTOR(ITF_NUM_HID, 3+CFG_TUD_CDC+CFG_TUD_VENDOR+CFG_TUD_HID, HID_PROTOCOL_NONE, sizeof(desc_hid_report), 0x80 | EPNUM_HID, 16, 10),
+  TUD_HID_DESCRIPTOR(ITF_NUM_HID, 3+CFG_TUD_CDC+CFG_TUD_VENDOR+CFG_TUD_HID, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report), 0x80 | EPNUM_HID, 16, 10),
 #endif
 
 #if CFG_TUD_MIDI
@@ -270,7 +297,9 @@ char const* string_desc_arr [] =
   "HH22 UART",             // 4: CDC Interface
 #endif
 #ifdef CFG_TUD_VENDOR
-  "HH22 WebUSB",     // 5: MSC Interface
+  "HH22 WebUSB Uart",     // 5: MSC Interface
+  "HH22 WebUSB FS",
+  "HH22 WebUSB Secret",
 #endif
 #ifdef CFG_TUD_HID
   "HH22 HID",              // 6: HID
