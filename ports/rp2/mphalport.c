@@ -108,6 +108,7 @@ int mp_hal_stdin_rx_chr(void) {
                 return buf[0];
             }
         }
+        tud_task();
         #endif
         MICROPY_EVENT_POLL_HOOK
     }

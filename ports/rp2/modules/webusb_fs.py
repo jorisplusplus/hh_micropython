@@ -1,7 +1,13 @@
 import webusb
 import struct
 import os
+import gc
+from time import sleep
+import time
+import machine
 
+rwbuf = bytearray(32)
+rwbuf_mv = memoryview(rwbuf)
 
 def sendpayload(payload):
     mv = memoryview(payload)
@@ -86,6 +92,7 @@ def getdir(data, command, id, size, received, length):
     return 1
 
 def readfile(data, command, id, size, received, length):
+    global rwbuf_mv
     if size != received:
         return 0
 
@@ -95,10 +102,11 @@ def readfile(data, command, id, size, received, length):
         f = open(str(data, "utf-8"), "rb")
         sendheader(command, id, filesize)
         while True:
-            data = f.read(32)
-            if not data:
+            num = f.readinto(rwbuf_mv)
+            if not num:
                 break
-            sendpayload(data)
+            sendpayload(rwbuf_mv[:num])
+            gc.collect()
         f.close()
     except:
         sendstr(command, id, "Can't open file")
@@ -111,6 +119,7 @@ def writefile(data, command, id, size, received, length):
     if received == length:
         if write_obj:
             write_obj.close()
+            write_obj = None
         write_failed = 0
 
     if write_obj == None and write_failed == 0:
@@ -121,6 +130,7 @@ def writefile(data, command, id, size, received, length):
                     write_obj = open(filename, "wb")
                     if received > i:
                         write_obj.write(data[i+1:received])
+                        print("writing")
                 except:
                     write_failed = 1
 
@@ -135,7 +145,9 @@ def writefile(data, command, id, size, received, length):
                 return 1
         return 0
     elif write_obj:
-        write_obj.write(data[0:length])
+        print("writing_start")
+        write_obj.write(data)
+        print("writing")
         if received == size:
             write_obj.close()
             sendok(command, id)
@@ -223,8 +235,17 @@ def mkdir(data, command, id, size, received, length):
         sender(command, id)
     return 1
 
+def runfile(data, command, id, size, received, length):
+    if size != received:
+        return 0
+    f = open("/startup.txt", "w")
+    f.write(str(data, "utf-8").replace("\x00", ""))
+    f.close()
+    sendok(command, id)
+
 def main_app():
     commands = dict()
+    commands[0] = runfile
     commands[1] = heartbeat
     commands[4096] = getdir
     commands[4097] = readfile
@@ -242,8 +263,16 @@ def main_app():
 
     payload = bytearray(1024)
     payload_mv = memoryview(payload)
+    lastmessage = 0
     while True:
+        if time.time() - lastmessage > 30:
+            print("In FS mode, reboot badge to switch to repl mode")
+            lastmessage = time.time()
+        if webusb.reboot():
+            machine.soft_reset()
         if webusb.available() >= 12:
+            gc.collect()
+            #print(gc.mem_free())
             webusb.read(memoryview(header))
             [command, size, check, id] = struct.unpack("<HIHI", memoryview(header))
             if check == 0xADDE:
@@ -254,18 +283,18 @@ def main_app():
                         commands[command](payload_mv, command, id, size, 0, 0)
                 else:
                     while received < size:
-                        endbuf = min(1024, size - (received-pos))
+                        endbuf = min(256, size - (received-pos))
                         delta = webusb.read(payload_mv[pos:endbuf])
                         received += delta
                         pos += delta                
                         if command in commands:
+                            #print(str(command)+".."+str(pos)+".."+str(received)+".."+str(size))
                             if commands[command](payload_mv[:pos], command, id, size, received, pos):
                                 pos = 0
+                        gc.collect()
                 
             else:   #Check failed clearing buffer
                 while webusb.read(memoryview(header)):
                     pass
-
-
-import _thread
-_thread.start_new_thread(main_app, ())
+webusb.setmode(1)
+main_app()
