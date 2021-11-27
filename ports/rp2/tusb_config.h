@@ -52,4 +52,6 @@ enum
   VENDOR_REQUEST_MICROSOFT = 2
 };
 
+extern volatile int usb_mode;
+
 #endif // MICROPY_INCLUDED_RP2_TUSB_CONFIG_H

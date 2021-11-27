@@ -27,6 +27,8 @@
 #include "tusb.h"
 #include "tusb_config.h"
 #include "pico/unique_id.h"
+#include "shared/runtime/pyexec.h"
+#include "py/runtime.h"
 
 #define URL  "webusb.hackz.one"
 
@@ -80,6 +82,9 @@ tusb_desc_device_t desc_device =
     .bNumConfigurations = 0x01
 };
 
+volatile int usb_reboot = 0;
+volatile int usb_mode = 0;
+
 // Invoked when received GET DEVICE DESCRIPTOR
 // Application return pointer to descriptor
 const uint8_t *tud_descriptor_device_cb(void)
@@ -114,10 +119,10 @@ void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_
   (void) buffer;
   (void) bufsize;
 
-  char strbuffer[100];
-  snprintf(strbuffer, 100, "hid: %d %d %d %d\n", instance, report_id, report_type, bufsize);
+  // char strbuffer[100];
+  // snprintf(strbuffer, 100, "hid: %d %d %d %d\n", instance, report_id, report_type, bufsize);
 
-  tud_cdc_write(strbuffer, strlen(strbuffer));
+  // tud_cdc_write(strbuffer, strlen(strbuffer));
 }
 
 uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen)
@@ -128,10 +133,10 @@ uint16_t tud_hid_get_report_cb(uint8_t instance, uint8_t report_id, hid_report_t
   (void) buffer;
   (void) reqlen;
 
-  char strbuffer[100];
-  snprintf(strbuffer, 100, "hid: %d %d %d %d\n", instance, report_id, report_type, reqlen);
+  // char strbuffer[100];
+  // snprintf(strbuffer, 100, "hid: %d %d %d %d\n", instance, report_id, report_type, reqlen);
 
-  tud_cdc_write(strbuffer, strlen(strbuffer));
+  // tud_cdc_write(strbuffer, strlen(strbuffer));
 
   return 0;
 }
@@ -344,3 +349,71 @@ const uint16_t *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
 
     return desc_str;
 }
+
+// Invoked when a control transfer occurred on an interface of this class
+// Driver response accordingly to the request and the transfer stage (setup/data/ack)
+// return false to stall control endpoint (e.g unsupported request)
+bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage, tusb_control_request_t const * request)
+{
+  // nothing to with DATA & ACK stage
+  if (stage != CONTROL_STAGE_SETUP) return true;
+
+  switch (request->bmRequestType_bit.type)
+  {
+    case TUSB_REQ_TYPE_VENDOR:
+      switch (request->bRequest)
+      {
+        case VENDOR_REQUEST_WEBUSB:
+          // match vendor request in BOS descriptor
+          // Get landing page url
+          return tud_control_xfer(rhport, request, (void*)(uintptr_t) &desc_url, desc_url.bLength);
+
+        case VENDOR_REQUEST_MICROSOFT:
+          if ( request->wIndex == 7 )
+          {
+            // Get Microsoft OS 2.0 compatible descriptor
+            uint16_t total_len;
+            memcpy(&total_len, desc_ms_os_20+8, 2);
+
+            return tud_control_xfer(rhport, request, (void*)(uintptr_t) desc_ms_os_20, total_len);
+          }else
+          {
+            return false;
+          }
+
+        default: break;
+      }
+    break;
+
+    case TUSB_REQ_TYPE_CLASS:
+      if (request->bRequest == 0x22)
+      {
+        mp_sched_keyboard_interrupt();
+    	// response with status OK
+        return tud_control_status(rhport, request);
+      }
+      if (request->bRequest == 0x23)
+      {
+        usb_mode = request->wValue;
+    	// response with status OK
+        return tud_control_status(rhport, request);
+      }
+    break;
+
+    default: break;
+  }
+
+  // stall unknown request
+  return false;
+}
+
+// Invoked when DATA Stage of VENDOR's request is complete
+bool tud_vendor_control_complete_cb(uint8_t rhport, tusb_control_request_t const * request)
+{
+  (void) rhport;
+  (void) request;
+
+  // nothing to do
+  return true;
+}
+
